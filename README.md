@@ -1,1 +1,410 @@
-# exploratory-analysis-of-text-documents
+DataViz4
+================
+
+Introduction.
+-------------
+
+The goal of this assignment was to cluster 7142 documents and analyse the contents of each cluster using appropriate visualisations. Each document refers to an email sent within a university network that contains a specific topic. As the topics/hierarchies were not previously known in advance two unsupervised clustering techniques were applied to achieve the necessary groupings. The methodology used within this report is described below.
+
+-   Pre Processing: For each document every word was converted to lower case, numbers were removed along with punctuations, accent marks and other diacritics. White spaces, stop words, sparse terms, particular words and email address were also removed from the documents.
+-   A random sample of the corpus was taken (for performance) and a document term matrix was created. An elbow graph was then generated and a value of k was estimated.
+-   Both spherical K-means and hierarchal techniques were applied and their chosen clusters were visualised in low dimensional space.
+-   A number of visualisations such as word clouds, bar charts, tree maps and chatter plots were all used to explain each cluster.
+
+``` r
+library(tm)
+library(SnowballC)
+library(wordcloud)
+library(RColorBrewer)
+library(dplyr)
+library(stringr)
+library(treemapify)
+library(philentropy)
+library(ggplot2)
+library(dendextend)
+library(cluster)
+library(factoextra)
+library(ggwordcloud)
+library(ggrepel)
+set.seed(120)
+
+
+journal_a <- VCorpus(DirSource("//fs2/18234602/Desktop/corpus", encoding = "UTF-8"), readerControl = list(language = "eng"))
+
+toSpace <- content_transformer(function (x , pattern ) gsub(pattern, " ", x))
+
+RemoveEmail <- function(x) {
+  str_replace_all(x,"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+", "")
+} 
+
+journal_a <- tm_map(journal_a, toSpace, "/")
+journal_a <- tm_map(journal_a, toSpace, "/.")
+journal_a <- tm_map(journal_a, toSpace, "\\|")
+journal_a <- tm_map(journal_a, content_transformer(tolower))
+journal_a <- tm_map(journal_a,content_transformer(RemoveEmail))
+journal_a <- tm_map(journal_a, removeWords, stopwords("english"))
+journal_a <- tm_map(journal_a, removePunctuation)
+journal_a <- tm_map(journal_a, removeNumbers)
+journal_a <- tm_map(journal_a, removeWords, letters)
+journal_b <- tm_map(journal_a, removeWords, c("subject", "organization",'lines','article','nntppostinghost','organ','line','uunetpyramidoptilinkcram'))
+journal_b <- tm_map(journal_b, stemDocument)
+journal_b <- tm_map(journal_b, stripWhitespace)
+```
+
+``` r
+archive.tdm <- TermDocumentMatrix(journal_b)
+
+# remove terms appearing in very few documents
+removeSparseTerms(archive.tdm, 0.999)
+```
+
+    ## <<TermDocumentMatrix (terms: 7970, documents: 7142)>>
+    ## Non-/sparse entries: 578396/56343344
+    ## Sparsity           : 99%
+    ## Maximal term length: 27
+    ## Weighting          : term frequency (tf)
+
+``` r
+#archive.tdm.matrix <- archive.tdm %>% as.matrix()
+
+archive <- tm_map(journal_b, stemDocument)
+
+archive.dtm <- DocumentTermMatrix(archive, control = list(weighting = function(x) weightTfIdf(x, normalize = TRUE)))
+
+# use trial and error to determine the sparsity threshold required
+# to create a feature set of about 4500 terms
+# you do not have to be very precise
+# for the data sets that are the size of classic 3, and 
+# the assignment data set unknown topics),  this is about right
+# "about right" means that experimentation shows this size works well
+
+sparsity_threshold = 0.9995
+archive.dtm<-removeSparseTerms(archive.dtm, sparsity_threshold)
+archive.dtm.mat <- archive.dtm %>% as.matrix()
+
+# remove any zero rows
+archive.dtm.mat <- archive.dtm.mat[rowSums(archive.dtm.mat^2) !=0,]
+
+percent = 30
+sample_size = nrow(archive.dtm.mat) * percent/100
+
+archive.dtm.mat.sample <- archive.dtm.mat[sample(1:nrow(archive.dtm.mat), sample_size, replace=FALSE),]
+
+sim_matrix<-distance(archive.dtm.mat.sample, method = "cosine")
+```
+
+### Clustering.
+
+The elbow graph implies that the number of clusters is equal to 3. This value makes sense when examining the lower dimensionality plots below. However when examining the outputted clusters there is no topic or trend in the majority of the clusters. Therefore this number was adjusted based on the coherence of each cluster. It is also clear that from the lower dimensionality plots below that the hierarchal clustering algorithm produces a much more realistic representation of the true natureof the clusters in the data.
+
+``` r
+k = 8
+fviz_nbclust(archive.dtm.mat.sample
+             , kmeans, method = "wss")+
+  geom_vline(xintercept = 3 , linetype = 2)+
+  labs(title= "Fig 1: Elbow Graph") + 
+  xlab("Number of Clusters K") +
+  ylab("Total Within Sum of Squares")
+```
+
+![](DataVISUAL4_files/figure-markdown_github/chunk3-1.png)
+
+``` r
+colnames(sim_matrix) <- rownames(archive.dtm.mat.sample)
+rownames(sim_matrix) <- rownames(archive.dtm.mat.sample)
+
+# cosine is really a similarity measure (inverse of distance measure)
+# we need to create a distance measure for hierarchical clustering
+max_sim <- max(sim_matrix)
+
+dist_matrix <- as.dist(max_sim-sim_matrix)
+archive.dtm.sample.dend <- hclust(dist_matrix, "ward.D")
+groups <- c("Cluster 1", "Cluster 2", "Cluster 3", "Cluster 4", "Cluster 5", "Cluster 6")
+
+archive.dtm.sample.dend.cut <- cutree(archive.dtm.sample.dend, k = k)
+
+points <- as.data.frame(cmdscale(dist_matrix, k = 2))
+palette <- colorspace::diverge_hcl(k) # Creating a color palette
+points <- merge(points, archive.dtm.sample.dend.cut, by="row.names", quiet=TRUE)
+colnames(points) <- c("Documents","X", "Y", "Cluster")
+
+
+clustering.kmeans <- kmeans(archive.dtm.mat.sample, k) 
+master.cluster <- clustering.kmeans$cluster 
+clusters <- as.factor(master.cluster)
+
+ggplot(points)+
+  geom_point(aes(x = X, y = Y, col = clusters),alpha = 0.4, size = 1)+
+  scale_color_brewer(palette="Dark2")+
+  xlab("X") +
+  ylab("Y") + 
+  ggtitle("Fig 3: Clusters in Low Dimensional Space") +
+  theme(panel.grid.major = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black", size = 0.25),  axis.text.x = element_text(angle = 30, hjust=1, vjust = .5), legend.key = element_rect(fill = NA, colour = NA, size = 0.25)) 
+```
+
+![](DataVISUAL4_files/figure-markdown_github/chunk5-1.png)
+
+``` r
+Clusters_ <- as.factor(points$Cluster)
+ggplot(points)+
+  geom_point(aes(x = X, y = Y, col = Clusters_ ),alpha = 0.4)+
+  scale_color_brewer(palette="Dark2")+
+  xlab("X") +
+  ylab("Y") + 
+  ggtitle("Fig 4: Clusters in Low Dimensional Space") +
+  theme(panel.grid.major = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black", size = 0.25),  axis.text.x = element_text(angle = 30, hjust=1, vjust = .5), legend.key = element_rect(fill = NA, colour = NA, size = 0.25)) 
+```
+
+![](DataVISUAL4_files/figure-markdown_github/chunk6-1.png)
+
+### Dendogram
+
+The dendogram below visualizes the hierarchal clustering algorithm. Each colour represents a specific cluster which was heuristically set to 8.
+
+``` r
+dend <- archive.dtm.sample.dend %>% as.dendrogram %>%color_branches(k = k)
+labels_colors(dend) <- "white"
+plot(dend,main = "Fig 2: Cluster dendrogram",sub = NULL, xlab = NULL, ylab = "Height")
+```
+
+![](DataVISUAL4_files/figure-markdown_github/chunk4-1.png)
+
+### Stacked Bar chart.
+
+The composition of each cluster was plotted using a stacked bar chart where the documents were divided into specific categories. As you can see there is a dominant cluster that contains the majority of the documents from the corpus whereas the other clusters are much smaller and only contain a specific topic. This large cluster implies that a number of smaller sub topics still remain this observation is also echoed from the dendogram above.
+
+``` r
+m <- length(unique(archive.dtm.sample.dend.cut))
+
+# create a data frame from the cut 
+archive.dtm.sample.dend.cut <- as.data.frame(archive.dtm.sample.dend.cut)
+
+
+#add a meaningful column namane
+colnames(archive.dtm.sample.dend.cut) = c("cluster")
+
+# add the doc names as an explicit column
+archive.dtm.sample.dend.cut$docs <- rownames(archive.dtm.sample.dend.cut)
+
+# I unlist the list assigned by rownames to $docs
+archive.dtm.sample.dend.cut$docs <- unlist(archive.dtm.sample.dend.cut$docs)
+
+archive.dtm.sample.dend.cut.table <-table(archive.dtm.sample.dend.cut$cluster, archive.dtm.sample.dend.cut$docs)
+
+
+archive.dtm.sample.dend.cut.table <-as.data.frame.table(archive.dtm.sample.dend.cut.table)
+
+
+corpus.dtm.sample.dend.cut <- archive.dtm.sample.dend.cut %>% mutate(docs =
+                                                                      case_when(as.integer(substr(docs,4,length(docs))) <= 500 ~ '0 - 500',
+                                                                                as.integer(substr(docs,4,length(docs)))  > 500 & as.integer(substr(docs,4,length(docs)))  <= 1000 ~ '500 - 1000',
+                                                                                as.integer(substr(docs,4,length(docs)))  > 1000 & as.integer(substr(docs,4,length(docs)))  <= 1500 ~ '1000 - 1500',
+                                                                                as.integer(substr(docs,4,length(docs)))  > 1500 & as.integer(substr(docs,4,length(docs)))  <= 2000 ~ '1500 - 2000',
+                                                                                as.integer(substr(docs,4,length(docs)))  > 2000 & as.integer(substr(docs,4,length(docs)))  <= 2500 ~ '2000 - 2500',
+                                                                                as.integer(substr(docs,4,length(docs)))  > 2500 & as.integer(substr(docs,4,length(docs)))  <= 3000 ~ '2500 - 3000',
+                                                                                as.integer(substr(docs,4,length(docs)))  > 3000 & as.integer(substr(docs,4,length(docs)))  <= 3500 ~ '3000 - 3500',
+                                                                                as.integer(substr(docs,4,length(docs)))  > 3500 & as.integer(substr(docs,4,length(docs)))  <= 4000 ~ '3500 - 4000',
+                                                                                as.integer(substr(docs,4,length(docs)))  > 4000 & as.integer(substr(docs,4,length(docs)))  <= 4500 ~ '4000 - 4500',
+                                                                                as.integer(substr(docs,4,length(docs)))  > 4500 & as.integer(substr(docs,4,length(docs)))  <= 5000 ~ '4500 - 5000',
+                                                                                as.integer(substr(docs,4,length(docs)))  > 5000 & as.integer(substr(docs,4,length(docs)))  <= 5500 ~ '5000 - 5500',
+                                                                                as.integer(substr(docs,4,length(docs)))  > 5500 & as.integer(substr(docs,4,length(docs)))  <= 6000 ~ '5500 - 6000',
+                                                                                as.integer(substr(docs,4,length(docs)))  > 6000 & as.integer(substr(docs,4,length(docs)))  <= 6500 ~ '6000 - 6500',
+                                                                                as.integer(substr(docs,4,length(docs)))  > 6500 & as.integer(substr(docs,4,length(docs)))  <= 7000 ~ '6500 - 7000',
+                                                                                as.integer(substr(docs,4,length(docs)))  > 7000 & as.integer(substr(docs,4,length(docs)))  <= 7500 ~ '7000 - 7500',
+                                                                                as.integer(substr(docs,4,length(docs)))  > 7500 & as.integer(substr(docs,4,length(docs)))  <= 8000 ~ '7500 - 8000'                                                                              ))
+
+corpus.dtm.sample.dend.cut <- table(corpus.dtm.sample.dend.cut$cluster, corpus.dtm.sample.dend.cut$docs)
+corpus.dtm.sample.dend.cut <- as.data.frame.table(corpus.dtm.sample.dend.cut)
+
+g<- ggplot(corpus.dtm.sample.dend.cut, aes(x=Var1, y=Freq,fill=Var2))
+g<- g + geom_bar(width = 0.5, stat="identity") +
+  xlab("Cluster IDs") +
+  ylab("Frequency") + 
+  ggtitle("Fig 5: Cluster compositions") +
+  theme(panel.grid.major = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black", size = 0.25),  axis.text.x = element_text(angle = 30, hjust=1, vjust = .5), legend.key = element_rect(fill = NA, colour = NA, size = 0.25)) 
+
+g
+```
+
+![](DataVISUAL4_files/figure-markdown_github/chunk7-1.png)
+
+### WordCloud.
+
+Word clouds visually represent the word frequency of a document by assigning a greater prominence to words that appear more frequently. Since our corpus is unlabelled it gives us a great indication of the topics present.
+
+``` r
+archive.tdm.sample <- archive.tdm[, rownames(archive.dtm.mat.sample)]
+
+# convert to r matrix
+archive.tdm.sample.mat <- archive.tdm.sample %>% as.matrix()
+
+# number of clusters
+for (i in 1:m) {
+  #the documents in  cluster i
+  cut_doc_ids <-which(archive.dtm.sample.dend.cut$cluster==i)
+  
+  #the subset of the matrix with these documents
+  archive.tdm.sample.mat.cluster<- archive.tdm.sample.mat[, cut_doc_ids]
+  
+  # sort the terms by frequency for the documents in this cluster
+  v <- sort(rowSums(archive.tdm.sample.mat.cluster),decreasing=TRUE)
+  d <- data.frame(word = names(v),freq=v)
+  d <- d[1:30,]
+  # call word cloud function
+  
+  wordcloud(words = d$word, freq = d$freq, scale=c(2,.5), min.freq = 3,
+            max.words=35, rot.per=0.35, 
+            colors=brewer.pal(8, "Dark2"))
+  title(paste("num clusters  = ",k, "; cluster", i))
+  
+}
+```
+
+![](DataVISUAL4_files/figure-markdown_github/chunk41-1.png)![](DataVISUAL4_files/figure-markdown_github/chunk41-2.png)![](DataVISUAL4_files/figure-markdown_github/chunk41-3.png)![](DataVISUAL4_files/figure-markdown_github/chunk41-4.png)![](DataVISUAL4_files/figure-markdown_github/chunk41-5.png)![](DataVISUAL4_files/figure-markdown_github/chunk41-6.png)![](DataVISUAL4_files/figure-markdown_github/chunk41-7.png)![](DataVISUAL4_files/figure-markdown_github/chunk41-8.png)
+
+``` r
+m <- length(unique(archive.dtm.sample.dend.cut$cluster))
+
+# number of terms per cluster to show
+n <-15
+
+#intialise an empty data frame
+#fields initiliased with empty vectors
+df <- data.frame(word=character(), freq = double(),cluster = integer())
+# for each cluster plot an explanatory word cloud
+for (i in 1:m) {
+  #the documents in  cluster i
+  cut_doc_ids <-which(archive.dtm.sample.dend.cut$cluster==i)
+  
+  #the subset of the matrix with these documents
+  archive.tdm.sample.mat.cluster<- archive.tdm.sample.mat[, cut_doc_ids]
+  
+  # sort the terms by frequency for the documents in this cluster
+  v <- sort(rowSums(archive.tdm.sample.mat.cluster),decreasing=TRUE)
+  d <- data.frame(word = names(v),freq=v, cluster=i)
+  
+  # we might want scale so that high frequencies in large cluster don't predominate
+  d[,2] <- scale(d[,2],center=FALSE, scale=TRUE)
+  
+  # take first n values only
+  d <-d[1:n,]
+  
+  #bind the data for this cluster to the df data frame created earlier
+  df<- rbind(df,d)
+}
+# the geom_treemap seems to only like vectors of values
+df$freq <- as.vector(df$freq)
+
+# simple function to rename the values in the cluster column as "cluster 1, cluster 2, etc"
+clust_name<-function(x){
+  paste("cluster", x)
+}
+
+# apply the function to the 'cluster' column
+df$cluster<- as.character(apply(df["cluster"], MARGIN = 2,FUN =clust_name ))
+g <- ggplot(df, aes(label = word, size = freq, col = cluster, subgroup = cluster)) +
+  geom_text_wordcloud() +
+  ggtitle("Fig 6: Word Cloud For Each Cluster") +
+  scale_color_brewer(palette="Dark2")+
+  scale_size_area(max_size = 10) +
+  theme_minimal()
+g
+```
+
+![](DataVISUAL4_files/figure-markdown_github/chunk12-1.png)
+
+### Another Approach
+
+Despite word clouds being visual appealing and engaging, they can sometimes be misleading. As the words size in the cloud is controlled by frequency, the length of the word and the white space around the letters can make it look more or less important. To counteract this I added three more approaches that also visualize the frequency of the words in each cluster.
+
+-   The first visualisation is a tree map that assigns an area and a colour gradient to describe the frequency of the words. Both of these features give a greater description of the word frequency in the document.
+
+-   Secondly a number a bar chart faceted by cluster and coloured by cluster describes the data using a continuous scale.
+
+-   Lastly a chatter plot was created. Within this plot the words are plotted as labels on a graph whose size and y position is determined by its frequency. While its colour and position on the x-axis is determined by its cluster. This graph combines both the engagement and visual aesthetics from the word cloud and the continuous scale from the bar chart to produce a superior visualisation.
+
+``` r
+gg<- ggplot(df, aes(area = freq, fill = freq, subgroup=cluster, label = word)) +
+  geom_treemap() +
+  geom_treemap_text(grow = T, reflow = T, colour = "black") +
+  facet_wrap( ~ cluster) +
+  
+  scale_fill_gradientn(colours = rainbow(n, s = 1, v = 1, start = 0, end = max(1, n - 1)/n, alpha = 0.5)) +
+  theme(legend.position = "bottom") +
+  labs(title = "Fig 7: The Most Frequent Terms in each cluster ", caption = "The area of each term is proportional to its relative frequency within cluster")
+
+gg
+```
+
+![](DataVISUAL4_files/figure-markdown_github/chunk11-1.png)
+
+``` r
+df2 <- df %>%  
+  group_by(cluster) %>% filter(!duplicated(freq,cluster)) %>%
+  top_n(n = 10, wt = freq) %>% ungroup %>%
+  mutate(word = reorder(word, freq))
+
+
+
+ ggplot(df2, aes(x = word, y = freq, fill = cluster)) +
+  scale_color_brewer(palette="Dark2")+
+  geom_col(show.legend = FALSE) +
+  ggtitle("Fig 8: Word Cloud For Each Cluster")+
+  facet_wrap(~ cluster,scales = "free", nrow = 4, ncol = 4) +
+  ylab("wordcount") +
+  coord_flip()+
+  theme( panel.background = element_blank()) +
+               scale_color_brewer(palette='Set1') +
+               theme(panel.grid.major = element_blank(),
+                     panel.background = element_blank(),
+                     axis.line = element_line(colour = "black", size = 0.25),
+                     plot.title = element_text(size = 8, face = "bold"),
+                     axis.title.x=element_blank(),
+                     axis.text.x = element_text(size=8, angle = 90, hjust=1, vjust = .5),
+                     axis.text.y = element_text(size=6, angle = 0, hjust=1, vjust = .5),
+                     title = element_text(size=8),
+                     legend.key = element_rect(fill = NA, colour = NA, size = 0.25))
+```
+
+![](DataVISUAL4_files/figure-markdown_github/chunk9-1.png)
+
+``` r
+df3 <- df %>%
+  group_by(cluster) %>%
+  top_n(n = 50,wt = freq)  %>%
+  
+  # construct ggplot
+  ggplot(aes(cluster, freq, label = word)) +
+  
+  # ggrepel geom, make arrows transparent, color by rank, size by n
+  geom_text_repel(segment.alpha = 0, 
+                  aes(colour=cluster, size=freq)) +
+  ggtitle('Fig 9: Top 50 Words from each cluster')+
+  xlab('Cluster')+ 
+  ylab('Word Frequency')+
+  # minimal theme & customizations
+  theme_minimal() +
+  scale_color_brewer(palette="Dark2")+
+  theme(legend.position= c(100,100),
+        legend.justification = c("left"),
+        panel.grid.major = element_line(colour = "whitesmoke"))
+
+
+df3 
+```
+
+![](DataVISUAL4_files/figure-markdown_github/chunk13-1.png)
+
+Conclusion.
+===========
+
+The contents of the clustered emails varied wildly from windows computer issues, Montreal baseball, Religion, the FBI, the cramer Homosexuality investigation and the Armenian Genocide.
+
+In conclusion, I believe that that there are approximately 8 clusters or topics that are being discussed throughout the university emails. Although the elbow graph suggests a clustering value of approximately 3, by examining the cluster compositions and dendogram there appeared to be more clusters. This observation was supported when examining the contents off the most frequent words in each cluster which are more coherent with a larger number of groupings. Despite this I fell that there are still more topics that aren't being represented due to the dominant size of a single cluster.
+
+References.
+===========
+
+-   <https://towardsdatascience.com/rip-wordclouds-long-live-chatterplots-e76a76896098>
+-   <https://cai.tools.sap/blog/text-clustering-with-r-an-introduction-for-data-scientists/>
+-   <https://nuigalway.blackboard.com/bbcswebdav/pid-1680768-dt-content-rid-12616643_1/courses/1819-CT5100/TextMining_and_Viz2.html>
