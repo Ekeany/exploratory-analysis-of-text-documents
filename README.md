@@ -107,7 +107,10 @@ fviz_nbclust(archive.dtm.mat.sample
   ylab("Total Within Sum of Squares")
 ```
 
-![](DataVISUAL4_files/figure-markdown_github/chunk3-1.png)
+<p align="center">
+  <img width="672" height="480" src="/figure-markdown_github/chunk3-1.png">
+</p>
+
 
 ``` r
 colnames(sim_matrix) <- rownames(archive.dtm.mat.sample)
@@ -142,7 +145,9 @@ ggplot(points)+
   theme(panel.grid.major = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black", size = 0.25),  axis.text.x = element_text(angle = 30, hjust=1, vjust = .5), legend.key = element_rect(fill = NA, colour = NA, size = 0.25)) 
 ```
 
-![](DataVISUAL4_files/figure-markdown_github/chunk5-1.png)
+<p align="center">
+  <img width="672" height="480" src="/figure-markdown_github/chunk5-1.png">
+</p>
 
 ``` r
 Clusters_ <- as.factor(points$Cluster)
@@ -155,7 +160,9 @@ ggplot(points)+
   theme(panel.grid.major = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black", size = 0.25),  axis.text.x = element_text(angle = 30, hjust=1, vjust = .5), legend.key = element_rect(fill = NA, colour = NA, size = 0.25)) 
 ```
 
-![](DataVISUAL4_files/figure-markdown_github/chunk6-1.png)
+<p align="center">
+  <img width="672" height="480" src="/figure-markdown_github/chunk6-1.png">
+</p>
 
 ### Dendogram
 
@@ -167,7 +174,9 @@ labels_colors(dend) <- "white"
 plot(dend,main = "Fig 2: Cluster dendrogram",sub = NULL, xlab = NULL, ylab = "Height")
 ```
 
-![](DataVISUAL4_files/figure-markdown_github/chunk4-1.png)
+<p align="center">
+  <img width="672" height="480" src="/figure-markdown_github/chunk4-1.png">
+</p>
 
 ### Stacked Bar chart.
 
@@ -226,7 +235,9 @@ g<- g + geom_bar(width = 0.5, stat="identity") +
 g
 ```
 
-![](DataVISUAL4_files/figure-markdown_github/chunk7-1.png)
+<p align="center">
+  <img width="672" height="480" src="/figure-markdown_github/chunk7-1.png">
+</p>
 
 ### WordCloud.
 
@@ -259,8 +270,30 @@ for (i in 1:m) {
   
 }
 ```
-
-![](DataVISUAL4_files/figure-markdown_github/chunk41-1.png)![](DataVISUAL4_files/figure-markdown_github/chunk41-2.png)![](DataVISUAL4_files/figure-markdown_github/chunk41-3.png)![](DataVISUAL4_files/figure-markdown_github/chunk41-4.png)![](DataVISUAL4_files/figure-markdown_github/chunk41-5.png)![](DataVISUAL4_files/figure-markdown_github/chunk41-6.png)![](DataVISUAL4_files/figure-markdown_github/chunk41-7.png)![](DataVISUAL4_files/figure-markdown_github/chunk41-8.png)
+<p align="center">
+  <img width="672" height="480" src="/figure-markdown_github/chunk41-1.png">
+</p>
+<p align="center">
+  <img width="672" height="480" src="/figure-markdown_github/chunk41-2.png">
+</p>
+<p align="center">
+  <img width="672" height="480" src="/figure-markdown_github/chunk41-3.png">
+</p>
+<p align="center">
+  <img width="672" height="480" src="/figure-markdown_github/chunk41-4.png">
+</p>
+<p align="center">
+  <img width="672" height="480" src="/figure-markdown_github/chunk41-5.png">
+</p>
+<p align="center">
+  <img width="672" height="480" src="/figure-markdown_github/chunk41-6.png">
+</p>
+<p align="center">
+  <img width="672" height="480" src="/figure-markdown_github/chunk41-7.png">
+</p>
+<p align="center">
+  <img width="672" height="480" src="/figure-markdown_github/chunk41-8.png">
+</p>
 
 ``` r
 m <- length(unique(archive.dtm.sample.dend.cut$cluster))
@@ -310,8 +343,10 @@ g <- ggplot(df, aes(label = word, size = freq, col = cluster, subgroup = cluster
   theme_minimal()
 g
 ```
+<p align="center">
+  <img width="672" height="480" src="/figure-markdown_github/chunk12-1.png">
+</p>
 
-![](DataVISUAL4_files/figure-markdown_github/chunk12-1.png)
 
 ### Another Approach
 
@@ -336,7 +371,9 @@ gg<- ggplot(df, aes(area = freq, fill = freq, subgroup=cluster, label = word)) +
 gg
 ```
 
-![](DataVISUAL4_files/figure-markdown_github/chunk11-1.png)
+<p align="center">
+  <img width="672" height="480" src="/figure-markdown_github/chunk11-1.png">
+</p>
 
 ``` r
 df2 <- df %>%  
@@ -366,7 +403,10 @@ df2 <- df %>%
                      legend.key = element_rect(fill = NA, colour = NA, size = 0.25))
 ```
 
-![](DataVISUAL4_files/figure-markdown_github/chunk9-1.png)
+<p align="center">
+  <img width="672" height="480" src="/figure-markdown_github/chunk9-1.png">
+</p>
+
 
 ``` r
 df3 <- df %>%
@@ -393,7 +433,9 @@ df3 <- df %>%
 df3 
 ```
 
-![](DataVISUAL4_files/figure-markdown_github/chunk13-1.png)
+<p align="center">
+  <img width="672" height="480" src="/figure-markdown_github/chunk13-1.png">
+</p>
 
 Conclusion.
 ===========
